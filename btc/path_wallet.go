@@ -1,17 +1,16 @@
 package btc
 
-import(
+import (
 	"context"
 	"errors"
 
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
-	"github.com/btcsuite/btcutil/hdkeychain"
 )
 
 type wallet struct {
-	Seed []byte
-	Network string
+	Network        string
+	Seed           []byte
 	DerivationPath []uint32
 }
 
@@ -20,11 +19,11 @@ func pathWallet(b *backend) *framework.Path {
 		Pattern: "wallet/" + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"network": &framework.FieldSchema{
-				Type: framework.TypeString,
+				Type:        framework.TypeString,
 				Description: "btc network type: mainnet | testnet",
 			},
 			"name": &framework.FieldSchema{
-				Type: framework.TypeString,
+				Type:        framework.TypeString,
 				Description: "wallet name",
 			},
 		},
@@ -58,13 +57,14 @@ func (b *backend) pathWalletWrite(ctx context.Context, req *logical.Request, d *
 		return nil, errors.New("Wallet with name '" + walletName + "' already exists")
 	}
 
+	// create a new wallet
 	wallet, err := createWallet(network)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// create storage entry
-	entry, err := logical.StorageEntryJSON("wallet/" + walletName, wallet)
+	entry, err := logical.StorageEntryJSON("wallet/"+walletName, wallet)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +80,7 @@ func (b *backend) pathWalletWrite(ctx context.Context, req *logical.Request, d *
 func (b *backend) pathWalletRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	walletName := d.Get("name").(string)
 
+	// get wallet from storage
 	w, err := b.GetWallet(ctx, req.Storage, walletName)
 	if err != nil {
 		return nil, err
@@ -88,21 +89,19 @@ func (b *backend) pathWalletRead(ctx context.Context, req *logical.Request, d *f
 		return nil, nil
 	}
 
-	net, err := getNetworkFromString(w.Network)
-	if err != nil {
-		return nil, err
-	}
-	
-	key, err := hdkeychain.NewMaster(w.Seed, net)
+	// get master key from seed
+	key, err := getMasterKey(w.Seed, w.Network)
 	if err != nil {
 		return nil, err
 	}
 
+	// first derive private key at path m/44'/0'/0'/0
 	xprv, err := derivePrivKey(key, w.DerivationPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
+	// then derive public key and return in xpub format
 	xpub, err := derivePubKey(xprv)
 	if err != nil {
 		return nil, err
@@ -111,13 +110,14 @@ func (b *backend) pathWalletRead(ctx context.Context, req *logical.Request, d *f
 	return &logical.Response{
 		Data: map[string]interface{}{
 			"network": w.Network,
-			"xpub": xpub.String(),
+			"xpub":    xpub.String(),
 		},
 	}, nil
 }
 
+// Retrieves a wallet in storage given the wallet name
 func (b *backend) GetWallet(ctx context.Context, store logical.Storage, walletName string) (*wallet, error) {
-	entry, err := store.Get(ctx, "wallet/" + walletName)
+	entry, err := store.Get(ctx, "wallet/"+walletName)
 	if err != nil {
 		return nil, err
 	}

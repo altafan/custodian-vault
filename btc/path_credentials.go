@@ -1,9 +1,8 @@
 package btc
 
-import(
+import (
 	"context"
 	"errors"
-	// "time"
 
 	uuid "github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/vault/helper/salt"
@@ -20,12 +19,12 @@ func pathCredentials(b *backend) *framework.Path {
 		Pattern: "creds/" + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": &framework.FieldSchema{
-				Type: framework.TypeString,
+				Type:        framework.TypeString,
 				Description: "Wallet name",
 			},
 		},
 		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.ReadOperation:   b.pathCredsRead,
+			logical.ReadOperation: b.pathCredsRead,
 		},
 
 		HelpSynopsis:    pathCredsHelpSyn,
@@ -64,7 +63,7 @@ func (b *backend) pathCredsRead(ctx context.Context, req *logical.Request, d *fr
 	return resp, nil
 }
 
-func (b *backend) NewSaltedToken(ctx context.Context, s logical.Storage, config *salt.Config) (string, string, error) {
+func newSaltedToken(ctx context.Context, s logical.Storage, config *salt.Config) (string, string, error) {
 	token, err := uuid.GenerateUUID()
 	if err != nil {
 		return "", "", err
@@ -79,12 +78,12 @@ func (b *backend) NewSaltedToken(ctx context.Context, s logical.Storage, config 
 }
 
 func (b *backend) NewToken(ctx context.Context, store logical.Storage, cred *credential, walletName string) (string, error) {
-	token, saltedToken, err := b.NewSaltedToken(ctx, store, nil)
+	token, saltedToken, err := newSaltedToken(ctx, store, nil)
 	if err != nil {
 		return "", err
 	}
 
-	entry, err := logical.StorageEntryJSON("creds/" + saltedToken, cred)
+	entry, err := logical.StorageEntryJSON("creds/"+saltedToken, cred)
 	if err != nil {
 		return "", err
 	}
@@ -103,8 +102,8 @@ func (b *backend) GetToken(ctx context.Context, s logical.Storage, token string)
 	}
 
 	saltedToken := newSalt.SaltID(token)
-	
-	entry, err := s.Get(ctx, "creds/" + saltedToken)
+
+	entry, err := s.Get(ctx, "creds/"+saltedToken)
 	if err != nil {
 		return nil, err
 	}
