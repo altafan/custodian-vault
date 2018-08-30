@@ -1,29 +1,103 @@
 package btc
 
-import(
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 
-	"github.com/btcsuite/btcutil/hdkeychain"
+	"github.com/btcsuite/btcutil"
+
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcutil/hdkeychain"
 )
 
 func createWallet(network string) (*wallet, error) {
 	// generate a random seed
 	seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
-	if err!= nil {
+	if err != nil {
 		return nil, err
 	}
 
+	// derivation path hard coded to m/44'/0'/0'/0 for mainnet
+	// and m/44'/1'/0'/0 for testnet as specified in BIP44
+	// support for BIP49 will be added later
+	// hardened key derivation starts at index 2147483648 (hex 0x80000000)
 	hkStart := uint32(0x80000000)
+	var path []uint32
+	if network == "mainnet" {
+		path = []uint32{hkStart + 44, hkStart, hkStart, 0}
+	}
+	if network == "testnet" {
+		path = []uint32{hkStart + 44, hkStart + 1, hkStart, 0}
+	}
 	wallet := &wallet{
-		Seed: seed,
-		Network: network,
-		DerivationPath: []uint32{hkStart + 44, hkStart, hkStart}, // hardcoded m/44'/0'/0'
+		Seed:           seed,
+		Network:        network,
+		DerivationPath: path,
 	}
 
 	return wallet, nil
 }
 
+func createMultiSigWallet(network string, pubkeys []string, m int, n int) (*multiSigWallet, error) {
+	// first create a standard wallet
+	w, err := createWallet(network)
+	if err != nil {
+		return nil, err
+	}
+
+	// get master key
+	masterKey, err := getMasterKey(w.Seed, w.Network)
+	if err != nil {
+		return nil, err
+	}
+
+	// derive private key at path m/44'/1'/0'/0/0
+	// this is the private key used to sign raw trasactions
+	privkey, err := derivePrivKey(masterKey, append(w.DerivationPath, 0))
+	if err != nil {
+		return nil, err
+	}
+
+	// get public key from derived key (not in extended key format)
+	pubkey, err := privkey.ECPubKey()
+	if err != nil {
+		return nil, err
+	}
+	net, err := getNetworkFromString(w.Network)
+	if err != nil {
+		return nil, err
+	}
+	pubkeybytes, err := btcutil.NewAddressPubKey(pubkey.SerializeUncompressed(), net)
+	if err != nil {
+		return nil, err
+	}
+
+	// add public key to list of public keys to build multisig wallet
+	pubkeys = append(pubkeys, pubkeybytes.String())
+
+	// create the redemption script
+	redeemScript, err := newRedeemScript(m, n, pubkeys)
+	if err != nil {
+		return nil, err
+	}
+
+	wallet := &multiSigWallet{
+		Seed:           w.Seed,
+		Network:        w.Network,
+		DerivationPath: w.DerivationPath,
+		PublicKeys:     pubkeys,
+		RedeemScript:   redeemScript,
+		M:              m,
+		N:              n,
+	}
+
+	return wallet, nil
+}
+
+// returns derived private key at `path` for `key` in extended key format
 func derivePrivKey(key *hdkeychain.ExtendedKey, path []uint32) (*hdkeychain.ExtendedKey, error) {
 	derivedKey := key
 
@@ -38,6 +112,7 @@ func derivePrivKey(key *hdkeychain.ExtendedKey, path []uint32) (*hdkeychain.Exte
 	return derivedKey, nil
 }
 
+// returns public key for derived `key` in extended key format
 func derivePubKey(key *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
 	// neuter private key to get public key
 	pubKey, err := key.Neuter()
@@ -48,19 +123,20 @@ func derivePubKey(key *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) 
 	return pubKey, nil
 }
 
+// derive address for wallet `w` at path m/44'/0'/0'/0/childnum
 func deriveAddress(w *wallet, childnum uint32) (*address, error) {
 	net, err := getNetworkFromString(w.Network)
 	if err != nil {
 		return nil, err
 	}
 
-	// get path master key
+	// master key
 	key, err := hdkeychain.NewMaster(w.Seed, net)
 	if err != nil {
 		return nil, err
 	}
 
-	// append childnum to derivation path
+	// append childnum to derivation path and derive private key
 	path := append(w.DerivationPath, childnum)
 	key, err = derivePrivKey(key, path)
 	if err != nil {
@@ -74,7 +150,7 @@ func deriveAddress(w *wallet, childnum uint32) (*address, error) {
 	}
 
 	return &address{
-		Childnum: childnum,
+		Childnum:    childnum,
 		LastAddress: addr.String(),
 	}, nil
 }
@@ -86,6 +162,87 @@ func getNetworkFromString(network string) (*chaincfg.Params, error) {
 	case "testnet":
 		return &chaincfg.TestNet3Params, nil
 	default:
-			return nil, errors.New("Invalid network")
+		return nil, errors.New("Invalid network")
 	}
+}
+
+// returns master private key from seed
+func getMasterKey(seed []byte, network string) (*hdkeychain.ExtendedKey, error) {
+	net, err := getNetworkFromString(network)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := hdkeychain.NewMaster(seed, net)
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
+}
+
+func newRedeemScript(m int, n int, pubkeys []string) (string, error) {
+	// check if params are valid:
+	// 1 <= n <= 7 && 1 <= m <= n
+	if n < 1 || n > 7 {
+		return "", errors.New("Invalid N param: it must be a value between 1 and 7 (inclusive)")
+	}
+	if m < 1 || m > n {
+		return "", errors.New("Invalid M param: it must be between 1 and N (inclusive)")
+	}
+
+	if len(pubkeys) != n {
+		return "", errors.New("Invalid number of pub keys: provided " + string(len(pubkeys)) + " expected " + string(n))
+	}
+
+	// get OP Code for m and n
+	mOPCode := txscript.OP_1 + (m - 1)
+	nOPCode := txscript.OP_1 + (n - 1)
+	// multisig redeemScript format:
+	// <OP_m> <A pubkey> <B pubkey> <C pubkey>... <OP_n> OP_CHECKMULTISIG
+	var redeemScript bytes.Buffer
+	redeemScript.WriteByte(byte(mOPCode))
+	for _, pubkey := range pubkeys {
+		pubkeybytes, err := hex.DecodeString(pubkey)
+		if err != nil {
+			return "", err
+		}
+		redeemScript.WriteByte(byte(len(pubkeybytes))) //PUSH
+		redeemScript.Write(pubkeybytes)                //<pubkey>
+	}
+	redeemScript.WriteByte(byte(nOPCode))
+	redeemScript.WriteByte(byte(txscript.OP_CHECKMULTISIG))
+
+	return hex.EncodeToString(redeemScript.Bytes()), nil
+}
+
+// returns p2sh address derived from redeem script of multisig
+func getMultiSigAddress(redeemScript string, network string) (string, error) {
+	net, err := getNetworkFromString(network)
+	if err != nil {
+		return "", err
+	}
+
+	redeemScriptBytes, err := hex.DecodeString(redeemScript)
+	if err != nil {
+		return "", err
+	}
+
+	address, err := btcutil.NewAddressScriptHash(redeemScriptBytes, net)
+	if err != nil {
+		return "", nil
+	}
+
+	return address.String(), nil
+}
+
+func doubleSHA256(payload []byte) ([]byte, error) {
+	shaHash := sha256.New()
+	shaHash.Write(payload)
+	hash := shaHash.Sum(nil)
+	shaHash2 := sha256.New()
+	shaHash2.Write(hash)
+	hashedPayload := shaHash2.Sum(nil)
+
+	return hashedPayload, nil
 }

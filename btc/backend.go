@@ -29,7 +29,7 @@ func Backend(c *logical.BackendConfig) (*backend, error) {
 
 	b.Backend = &framework.Backend{
 		BackendType: logical.TypeLogical,
-		Help: backendHelp,
+		Help:        backendHelp,
 		PathsSpecial: &logical.Paths{
 			LocalStorage: []string{
 				"secrets/",
@@ -39,6 +39,10 @@ func Backend(c *logical.BackendConfig) (*backend, error) {
 			pathWallet(&b),
 			pathAddress(&b),
 			pathCredentials(&b),
+			pathTransaction(&b),
+			pathMultiSigCredentials(&b),
+			pathMultiSigWallet(&b),
+			pathMultiSigAddress(&b),
 		},
 		Secrets: []*framework.Secret{
 			secretCredentials(&b),
