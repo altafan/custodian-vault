@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/tyler-smith/go-bip39"
+
 	"github.com/btcsuite/btcutil"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -13,9 +15,18 @@ import (
 	"github.com/btcsuite/btcutil/hdkeychain"
 )
 
+func seedFromMnemonic(mnemonic string) []byte {
+	return bip39.NewSeed(mnemonic, "")
+}
+
 func createWallet(network string) (*wallet, error) {
-	// generate a random seed
-	seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
+	// generate entropy for mnemonic
+	entropy, err := bip39.NewEntropy(256)
+	if err != nil {
+		return nil, err
+	}
+	// generate mnemonic
+	mnemonic, err := bip39.NewMnemonic(entropy)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +44,7 @@ func createWallet(network string) (*wallet, error) {
 		path = []uint32{hkStart + 44, hkStart + 1, hkStart, 0}
 	}
 	wallet := &wallet{
-		Seed:           seed,
+		Mnemonic:       mnemonic,
 		Network:        network,
 		DerivationPath: path,
 	}
@@ -48,8 +59,10 @@ func createMultiSigWallet(network string, pubkeys []string, m int, n int) (*mult
 		return nil, err
 	}
 
+	seed := seedFromMnemonic(w.Mnemonic)
+
 	// get master key
-	masterKey, err := getMasterKey(w.Seed, w.Network)
+	masterKey, err := getMasterKey(seed, w.Network)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +98,7 @@ func createMultiSigWallet(network string, pubkeys []string, m int, n int) (*mult
 	}
 
 	wallet := &multiSigWallet{
-		Seed:           w.Seed,
+		Mnemonic:       w.Mnemonic,
 		Network:        w.Network,
 		DerivationPath: w.DerivationPath,
 		PublicKeys:     pubkeys,
@@ -130,8 +143,10 @@ func deriveAddress(w *wallet, childnum uint32) (*address, error) {
 		return nil, err
 	}
 
+	seed := seedFromMnemonic(w.Mnemonic)
+
 	// master key
-	key, err := hdkeychain.NewMaster(w.Seed, net)
+	key, err := hdkeychain.NewMaster(seed, net)
 	if err != nil {
 		return nil, err
 	}

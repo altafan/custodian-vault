@@ -10,7 +10,7 @@ import (
 
 type multiSigWallet struct {
 	Network        string
-	Seed           []byte
+	Mnemonic       string
 	DerivationPath []uint32
 	M              int
 	N              int

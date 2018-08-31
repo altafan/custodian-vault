@@ -59,7 +59,9 @@ func (b *backend) pathTransactionWrite(ctx context.Context, req *logical.Request
 		return nil, errors.New("missing raw transaction to sign")
 	}
 
-	masterKey, err := getMasterKey(w.Seed, w.Network)
+	seed := seedFromMnemonic(w.Mnemonic)
+
+	masterKey, err := getMasterKey(seed, w.Network)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +100,7 @@ func (b *backend) pathTransactionWrite(ctx context.Context, req *logical.Request
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"signedTransaction": signedTransaction,
+			"signature": signedTransaction,
 		},
 	}, nil
 }

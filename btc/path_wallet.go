@@ -10,7 +10,7 @@ import (
 
 type wallet struct {
 	Network        string
-	Seed           []byte
+	Mnemonic       string
 	DerivationPath []uint32
 }
 
@@ -74,7 +74,11 @@ func (b *backend) pathWalletWrite(ctx context.Context, req *logical.Request, d *
 		return nil, err
 	}
 
-	return nil, nil
+	return &logical.Response{
+		Data: map[string]interface{}{
+			"mnemonic": wallet.Mnemonic,
+		},
+	}, nil
 }
 
 func (b *backend) pathWalletRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
@@ -89,8 +93,10 @@ func (b *backend) pathWalletRead(ctx context.Context, req *logical.Request, d *f
 		return nil, nil
 	}
 
+	seed := seedFromMnemonic(w.Mnemonic)
+
 	// get master key from seed
-	key, err := getMasterKey(w.Seed, w.Network)
+	key, err := getMasterKey(seed, w.Network)
 	if err != nil {
 		return nil, err
 	}
