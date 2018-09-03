@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 )
@@ -31,19 +33,19 @@ func pathTransaction(b *backend) *framework.Path {
 			logical.UpdateOperation: b.pathTransactionWrite,
 		},
 
-		HelpSynopsis:    pathTransactionHelpSyn,
-		HelpDescription: pathTransactionHelpDesc,
+		HelpSynopsis:    PathTransactionHelpSyn,
+		HelpDescription: PathTransactionHelpDesc,
 	}
 }
 
 func (b *backend) pathTransactionWrite(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	walletName := d.Get("name").(string)
 	if walletName == "" {
-		return nil, errors.New("missing wallet name")
+		return nil, errors.New(MissingWalletNameError)
 	}
 	multisig := d.Get("multisig").(bool)
 	if multisig {
-		walletName = "multisig_" + walletName
+		walletName = MultiSigPrefix + walletName
 	}
 
 	w, err := b.GetWallet(ctx, req.Storage, walletName)
@@ -56,7 +58,7 @@ func (b *backend) pathTransactionWrite(ctx context.Context, req *logical.Request
 
 	rawTx := d.Get("rawTx").(string)
 	if rawTx == "" {
-		return nil, errors.New("missing raw transaction to sign")
+		return nil, errors.New(MissingRawTxError)
 	}
 
 	seed := seedFromMnemonic(w.Mnemonic)
@@ -85,25 +87,18 @@ func (b *backend) pathTransactionWrite(ctx context.Context, req *logical.Request
 	}
 
 	// double sha256 before signing
-	hashedRawTx, err := doubleSHA256(rawTxBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	signature, err := privateKey.Sign(hashedRawTx)
+	hashedRawTx := chainhash.DoubleHashB(rawTxBytes)
+	signatureBytes, err := privateKey.Sign(hashedRawTx)
 	if err != nil {
 		return nil, err
 	}
 
 	// convert signature raw bytes to string
-	signedTransaction := hex.EncodeToString(signature.Serialize())
+	signature := hex.EncodeToString(signatureBytes.Serialize())
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"signature": signedTransaction,
+			"signature": signature,
 		},
 	}, nil
 }
-
-const pathTransactionHelpSyn = "Sign bitcoin raw transaction"
-const pathTransactionHelpDesc = ""

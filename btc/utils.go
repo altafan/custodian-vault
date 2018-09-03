@@ -2,7 +2,6 @@ package btc
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 
@@ -21,7 +20,7 @@ func seedFromMnemonic(mnemonic string) []byte {
 
 func createWallet(network string) (*wallet, error) {
 	// generate entropy for mnemonic
-	entropy, err := bip39.NewEntropy(256)
+	entropy, err := bip39.NewEntropy(EntropyBitSize)
 	if err != nil {
 		return nil, err
 	}
@@ -35,13 +34,12 @@ func createWallet(network string) (*wallet, error) {
 	// and m/44'/1'/0'/0 for testnet as specified in BIP44
 	// support for BIP49 will be added later
 	// hardened key derivation starts at index 2147483648 (hex 0x80000000)
-	hkStart := uint32(0x80000000)
 	var path []uint32
-	if network == "mainnet" {
-		path = []uint32{hkStart + 44, hkStart, hkStart, 0}
+	if network == MainNet {
+		path = []uint32{Purpose, CoinTypeMainNet, Account, Change}
 	}
-	if network == "testnet" {
-		path = []uint32{hkStart + 44, hkStart + 1, hkStart, 0}
+	if network == TestNet {
+		path = []uint32{Purpose, CoinTypeTestNet, Account, Change}
 	}
 	wallet := &wallet{
 		Mnemonic:       mnemonic,
@@ -69,7 +67,7 @@ func createMultiSigWallet(network string, pubkeys []string, m int, n int) (*mult
 
 	// derive private key at path m/44'/1'/0'/0/0
 	// this is the private key used to sign raw trasactions
-	privkey, err := derivePrivKey(masterKey, append(w.DerivationPath, 0))
+	privkey, err := derivePrivKey(masterKey, append(w.DerivationPath, MultiSigDefaultAddressIndex))
 	if err != nil {
 		return nil, err
 	}
@@ -172,12 +170,12 @@ func deriveAddress(w *wallet, childnum uint32) (*address, error) {
 
 func getNetworkFromString(network string) (*chaincfg.Params, error) {
 	switch network {
-	case "mainnet":
+	case MainNet:
 		return &chaincfg.MainNetParams, nil
-	case "testnet":
+	case TestNet:
 		return &chaincfg.TestNet3Params, nil
 	default:
-		return nil, errors.New("Invalid network")
+		return nil, errors.New(InvalidNetworkError)
 	}
 }
 
@@ -199,11 +197,11 @@ func getMasterKey(seed []byte, network string) (*hdkeychain.ExtendedKey, error) 
 func newRedeemScript(m int, n int, pubkeys []string) (string, error) {
 	// check if params are valid:
 	// 1 <= n <= 7 && 1 <= m <= n
-	if n < 1 || n > 7 {
-		return "", errors.New("Invalid N param: it must be a value between 1 and 7 (inclusive)")
+	if n < MinMultiSigN || n > MaxMultiSigN {
+		return "", errors.New(NOutOfRangeError)
 	}
-	if m < 1 || m > n {
-		return "", errors.New("Invalid M param: it must be between 1 and N (inclusive)")
+	if m < MinMultiSigN || m > n {
+		return "", errors.New(MOutOfRangeError)
 	}
 
 	if len(pubkeys) != n {
@@ -249,15 +247,4 @@ func getMultiSigAddress(redeemScript string, network string) (string, error) {
 	}
 
 	return address.String(), nil
-}
-
-func doubleSHA256(payload []byte) ([]byte, error) {
-	shaHash := sha256.New()
-	shaHash.Write(payload)
-	hash := shaHash.Sum(nil)
-	shaHash2 := sha256.New()
-	shaHash2.Write(hash)
-	hashedPayload := shaHash2.Sum(nil)
-
-	return hashedPayload, nil
 }

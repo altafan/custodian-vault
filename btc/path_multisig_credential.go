@@ -10,7 +10,7 @@ import (
 
 func pathMultiSigCredentials(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "creds/multisig/" + framework.GenericNameRegex("name"),
+		Pattern: PathMultiSigCreds + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": &framework.FieldSchema{
 				Type:        framework.TypeString,
@@ -21,18 +21,18 @@ func pathMultiSigCredentials(b *backend) *framework.Path {
 			logical.ReadOperation: b.pathMultiSigCredsRead,
 		},
 
-		HelpSynopsis:    pathMultiSigCredsHelpSyn,
-		HelpDescription: pathMultiSigCredsHelpDesc,
+		HelpSynopsis:    PathMultiSigCredsHelpSyn,
+		HelpDescription: PathMultiSigCredsHelpDesc,
 	}
 }
 
 func (b *backend) pathMultiSigCredsRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	walletName := d.Get("name").(string)
 	if walletName == "" {
-		return nil, errors.New("missing wallet name")
+		return nil, errors.New(MissingWalletNameError)
 	}
 
-	walletName = "multisig_" + walletName
+	walletName = MultiSigPrefix + walletName
 
 	w, err := b.GetMultiSigWallet(ctx, req.Storage, walletName)
 	if err != nil {
@@ -58,9 +58,3 @@ func (b *backend) pathMultiSigCredsRead(ctx context.Context, req *logical.Reques
 
 	return resp, nil
 }
-
-const pathMultiSigCredsHelpSyn = `
-Creates access tokens for already generated multisig wallet
-`
-
-const pathMultiSigCredsHelpDesc = ``

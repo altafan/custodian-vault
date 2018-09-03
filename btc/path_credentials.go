@@ -16,7 +16,7 @@ type credential struct {
 
 func pathCredentials(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "creds/" + framework.GenericNameRegex("name"),
+		Pattern: PathCreds + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": &framework.FieldSchema{
 				Type:        framework.TypeString,
@@ -27,15 +27,15 @@ func pathCredentials(b *backend) *framework.Path {
 			logical.ReadOperation: b.pathCredsRead,
 		},
 
-		HelpSynopsis:    pathCredsHelpSyn,
-		HelpDescription: pathCredsHelpDesc,
+		HelpSynopsis:    PathCredsHelpSyn,
+		HelpDescription: PathCredsHelpDesc,
 	}
 }
 
 func (b *backend) pathCredsRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	walletName := d.Get("name").(string)
 	if walletName == "" {
-		return nil, errors.New("missing wallet name")
+		return nil, errors.New(MissingWalletNameError)
 	}
 
 	w, err := b.GetWallet(ctx, req.Storage, walletName)
@@ -83,7 +83,7 @@ func (b *backend) NewToken(ctx context.Context, store logical.Storage, cred *cre
 		return "", err
 	}
 
-	entry, err := logical.StorageEntryJSON("creds/"+saltedToken, cred)
+	entry, err := logical.StorageEntryJSON(PathCreds+saltedToken, cred)
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +103,7 @@ func (b *backend) GetToken(ctx context.Context, s logical.Storage, token string)
 
 	saltedToken := newSalt.SaltID(token)
 
-	entry, err := s.Get(ctx, "creds/"+saltedToken)
+	entry, err := s.Get(ctx, PathCreds+saltedToken)
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +118,3 @@ func (b *backend) GetToken(ctx context.Context, s logical.Storage, token string)
 
 	return &cred, nil
 }
-
-const pathCredsHelpSyn = `
-Creates access tokens for already generated wallet
-`
-
-const pathCredsHelpDesc = ``

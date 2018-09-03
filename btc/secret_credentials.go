@@ -2,15 +2,13 @@ package btc
 
 import (
 	"context"
-	"time"
 	"errors"
+	"time"
 
 	"github.com/hashicorp/vault/helper/salt"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 )
-
-const SecretCredsType = "creds"
 
 func secretCredentials(b *backend) *framework.Secret {
 	return &framework.Secret{
@@ -22,8 +20,8 @@ func secretCredentials(b *backend) *framework.Secret {
 			},
 		},
 		DefaultDuration: time.Duration(1 * time.Hour),
-		Renew:  b.secretCredsRenew,
-		Revoke: b.secretCredsRevoke,
+		Renew:           b.secretCredsRenew,
+		Revoke:          b.secretCredsRevoke,
 	}
 }
 
@@ -38,7 +36,7 @@ func (b *backend) secretCredsRenew(ctx context.Context, req *logical.Request, d 
 func (b *backend) secretCredsRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	id, ok := req.Secret.InternalData["token"].(string)
 	if !ok {
-		return nil, errors.New("secret is missing internal data")
+		return nil, errors.New(MissingInternalDataError)
 	}
 
 	s, err := salt.NewSalt(ctx, req.Storage, nil)
@@ -46,7 +44,7 @@ func (b *backend) secretCredsRevoke(ctx context.Context, req *logical.Request, d
 		return nil, err
 	}
 
-	err = req.Storage.Delete(ctx, "creds/" + s.SaltID(id))
+	err = req.Storage.Delete(ctx, PathCreds+s.SaltID(id))
 	if err != nil {
 		return nil, err
 	}

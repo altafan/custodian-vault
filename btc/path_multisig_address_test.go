@@ -10,7 +10,7 @@ import (
 func TestMultiSigAddress(t *testing.T) {
 	b, storage := getTestBackend(t)
 
-	exp := "missing auth token"
+	exp := MissingTokenError
 	_, err := b.HandleRequest(context.Background(), &logical.Request{
 		Storage:   storage,
 		Path:      "address/multisig/wallet1",
@@ -23,7 +23,7 @@ func TestMultiSigAddress(t *testing.T) {
 		t.Fatalf("Want: %v, got: %v", exp, err)
 	}
 
-	exp = "token not found"
+	exp = InvalidTokenError
 	_, err = b.HandleRequest(context.Background(), &logical.Request{
 		Storage:   storage,
 		Path:      "address/multisig/wallet1",

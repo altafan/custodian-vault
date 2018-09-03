@@ -1,8 +1,8 @@
 package btc
 
 import (
-	"testing"
 	"context"
+	"testing"
 
 	"github.com/hashicorp/vault/logical"
 )
@@ -10,10 +10,10 @@ import (
 func TestAddress(t *testing.T) {
 	b, storage := getTestBackend(t)
 
-	exp := "missing auth token"
+	exp := MissingTokenError
 	_, err := b.HandleRequest(context.Background(), &logical.Request{
-		Storage: storage,
-		Path: "address/wallet1",
+		Storage:   storage,
+		Path:      "address/wallet1",
 		Operation: logical.UpdateOperation,
 	})
 	if err == nil {
@@ -23,10 +23,10 @@ func TestAddress(t *testing.T) {
 		t.Fatalf("Want: %v, got: %v", exp, err)
 	}
 
-	exp = "token not found"
+	exp = InvalidTokenError
 	_, err = b.HandleRequest(context.Background(), &logical.Request{
-		Storage: storage,
-		Path: "address/wallet1",
+		Storage:   storage,
+		Path:      "address/wallet1",
 		Operation: logical.UpdateOperation,
 		Data: map[string]interface{}{
 			"token": "testtoken",

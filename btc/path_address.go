@@ -15,7 +15,7 @@ type address struct {
 
 func pathAddress(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "address/" + framework.GenericNameRegex("name"),
+		Pattern: PathAddress + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": &framework.FieldSchema{
 				Type:        framework.TypeString,
@@ -30,15 +30,15 @@ func pathAddress(b *backend) *framework.Path {
 			logical.UpdateOperation: b.pathAddressWrite,
 		},
 
-		HelpSynopsis:    pathAddressHelpSyn,
-		HelpDescription: pathAddressHelpDesc,
+		HelpSynopsis:    PathAddressHelpSyn,
+		HelpDescription: PathAddressHelpDesc,
 	}
 }
 
 func (b *backend) pathAddressWrite(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	t := d.Get("token").(string)
 	if t == "" {
-		return nil, errors.New("missing auth token")
+		return nil, errors.New(MissingTokenError)
 	}
 
 	// check if auth token is valid
@@ -47,7 +47,7 @@ func (b *backend) pathAddressWrite(ctx context.Context, req *logical.Request, d 
 		return nil, err
 	}
 	if token == nil {
-		return nil, errors.New("token not found")
+		return nil, errors.New(InvalidTokenError)
 	}
 
 	walletName := token.WalletName
@@ -69,7 +69,7 @@ func (b *backend) pathAddressWrite(ctx context.Context, req *logical.Request, d 
 	}
 
 	// override the storage with new generated address
-	entry, err := logical.StorageEntryJSON("address/"+walletName, a)
+	entry, err := logical.StorageEntryJSON(PathAddress+walletName, a)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (b *backend) pathAddressWrite(ctx context.Context, req *logical.Request, d 
 func (b *backend) GetLastUsedAddressIndex(ctx context.Context, store logical.Storage, walletName string) (uint32, error) {
 	var childnum uint32
 
-	addressEntry, err := store.Get(ctx, "address/"+walletName)
+	addressEntry, err := store.Get(ctx, PathAddress+walletName)
 	if err != nil {
 		return 0, err
 	}
@@ -103,11 +103,3 @@ func (b *backend) GetLastUsedAddressIndex(ctx context.Context, store logical.Sto
 
 	return childnum, nil
 }
-
-const pathAddressHelpSyn = `
-Returns a new receiving address for selected wallet
-`
-
-const pathAddressHelpDesc = `
-Test description
-`

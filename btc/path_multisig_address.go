@@ -10,7 +10,7 @@ import (
 
 func pathMultiSigAddress(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "address/multisig/" + framework.GenericNameRegex("name"),
+		Pattern: PathMultiSigAddress + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": &framework.FieldSchema{
 				Type:        framework.TypeString,
@@ -25,15 +25,15 @@ func pathMultiSigAddress(b *backend) *framework.Path {
 			logical.UpdateOperation: b.pathMultiSigAddressWrite,
 		},
 
-		HelpSynopsis:    pathMultiSigAddressHelpSyn,
-		HelpDescription: pathMultiSigAddressHelpDesc,
+		HelpSynopsis:    PathMultiSigAddressHelpSyn,
+		HelpDescription: PathMultiSigAddressHelpDesc,
 	}
 }
 
 func (b *backend) pathMultiSigAddressWrite(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	t := d.Get("token").(string)
 	if t == "" {
-		return nil, errors.New("missing auth token")
+		return nil, errors.New(MissingTokenError)
 	}
 
 	// check if auth token is valid
@@ -42,12 +42,15 @@ func (b *backend) pathMultiSigAddressWrite(ctx context.Context, req *logical.Req
 		return nil, err
 	}
 	if token == nil {
-		return nil, errors.New("token not found")
+		return nil, errors.New(InvalidTokenError)
 	}
 
 	// get wallet from storage
 	walletName := token.WalletName
 	w, err := b.GetMultiSigWallet(ctx, req.Storage, walletName)
+	if err != nil {
+		return nil, err
+	}
 
 	// for multisig, address is always the same and it's built from redeem script
 	address, err := getMultiSigAddress(w.RedeemScript, w.Network)
@@ -61,11 +64,3 @@ func (b *backend) pathMultiSigAddressWrite(ctx context.Context, req *logical.Req
 		},
 	}, nil
 }
-
-const pathMultiSigAddressHelpSyn = `
-Returns a new receiving address for selected wallet
-`
-
-const pathMultiSigAddressHelpDesc = `
-Test description
-`

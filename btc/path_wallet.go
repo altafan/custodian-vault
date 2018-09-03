@@ -16,7 +16,7 @@ type wallet struct {
 
 func pathWallet(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "wallet/" + framework.GenericNameRegex("name"),
+		Pattern: PathWallet + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"network": &framework.FieldSchema{
 				Type:        framework.TypeString,
@@ -32,20 +32,20 @@ func pathWallet(b *backend) *framework.Path {
 			logical.UpdateOperation: b.pathWalletWrite,
 		},
 
-		HelpSynopsis:    pathWalletsHelpSyn,
-		HelpDescription: pathWalletsHelpDesc,
+		HelpSynopsis:    PathWalletsHelpSyn,
+		HelpDescription: PathWalletsHelpDesc,
 	}
 }
 
 func (b *backend) pathWalletWrite(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	network := d.Get("network").(string)
 	if network == "" {
-		return nil, errors.New("missing network")
+		return nil, errors.New(MissingNetworkError)
 	}
 
 	walletName := d.Get("name").(string)
 	if walletName == "" {
-		return nil, errors.New("missing wallet name")
+		return nil, errors.New(MissingWalletNameError)
 	}
 
 	// return error if a wallet with same name has already been created
@@ -64,7 +64,7 @@ func (b *backend) pathWalletWrite(ctx context.Context, req *logical.Request, d *
 	}
 
 	// create storage entry
-	entry, err := logical.StorageEntryJSON("wallet/"+walletName, wallet)
+	entry, err := logical.StorageEntryJSON(PathWallet+walletName, wallet)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (b *backend) pathWalletRead(ctx context.Context, req *logical.Request, d *f
 
 // Retrieves a wallet in storage given the wallet name
 func (b *backend) GetWallet(ctx context.Context, store logical.Storage, walletName string) (*wallet, error) {
-	entry, err := store.Get(ctx, "wallet/"+walletName)
+	entry, err := store.Get(ctx, PathWallet+walletName)
 	if err != nil {
 		return nil, err
 	}
@@ -138,9 +138,3 @@ func (b *backend) GetWallet(ctx context.Context, store logical.Storage, walletNa
 
 	return &w, nil
 }
-
-const pathWalletsHelpSyn = `
-Creates a new wallet by specifying network and name
-`
-
-const pathWalletsHelpDesc = ``
