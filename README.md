@@ -5,11 +5,11 @@ At the moment only bitcoin is supported.
 
 ## Table of Contents
 
-* [Prerequisites](Prerequisites)
-* [Installation](Installation)
-* [Usage](Usage)
-* [Tests](Tests)
-* [Troubleshooting](Troubleshooting)
+* [Prerequisites](#Prerequisites)
+* [Installation](#Installation)
+* [Usage](#Usage)
+* [Tests](#Tests)
+* [Troubleshooting](#Troubleshooting)
 
 ## Prerequisites
 
